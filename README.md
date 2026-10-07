@@ -35,6 +35,83 @@ python app.py test
 
 The embedded suite tests validation, certificate rendering, progress, bulk sizes, individual failures, PDF/ZIP downloads, cross-job access control, and both CSV input formats.
 
+## Verify end to end from a terminal
+
+Start the server in Terminal 1:
+
+```powershell
+.\.venv\Scripts\python.exe app.py serve
+```
+
+In Terminal 2, submit a JSON request:
+
+```powershell
+$body = @{
+    event_name = "Rahul Participation Workshop"
+    certificate_type = "Participation"
+    issuer_name = "SHUSMIT"
+    issuer_title = "Program Director"
+    issue_date = "2026-03-03"
+    recipients = @(@{name = "Rahul"; email = "rahul@example.com"})
+} | ConvertTo-Json -Depth 5
+$job = Invoke-RestMethod http://127.0.0.1:8000/jobs -Method Post `
+    -ContentType "application/json" -Body $body
+$status = Invoke-RestMethod "http://127.0.0.1:8000$($job.status_url)"
+$status | ConvertTo-Json -Depth 10
+```
+
+When the status is `completed`, download the first PDF:
+
+```powershell
+Invoke-WebRequest `
+    -Uri "http://127.0.0.1:8000$($status.certificates[0].download_url)" `
+    -OutFile ".\rahul-certificate.pdf"
+Start-Process ".\rahul-certificate.pdf"
+```
+
+For CSV verification, create a separate file (do not redirect into `app.py`):
+
+```powershell
+@"
+name
+Rahul
+Asha Sharma
+Diego Martin
+"@ | Set-Content -Encoding UTF8 ".\demo.csv"
+```
+
+Submit it and download the ZIP:
+
+```powershell
+$job = curl.exe -s -X POST http://127.0.0.1:8000/jobs/csv `
+    -F "file=@demo.csv" `
+    -F "event_name=Terminal CSV Demo" `
+    -F "certificate_type=Participation" `
+    -F "issuer_name=SHUSMIT" `
+    -F "issuer_title=Program Director" `
+    -F "issue_date=2026-03-03" | ConvertFrom-Json
+$status = Invoke-RestMethod "http://127.0.0.1:8000$($job.status_url)"
+Invoke-WebRequest `
+    -Uri "http://127.0.0.1:8000$($status.download_all_url)" `
+    -OutFile ".\demo-certificates.zip"
+```
+
+The live verification produced Rahul's PDF with HTTP `200`, and the three-row CSV job completed with three successful certificates and a ZIP response with HTTP `200`.
+
+## Measured generation times
+
+Measured on Windows with Python 3.13, SQLite, ReportLab, and the predefined template. Each measurement includes submitting the request and polling until the job reached `completed`; it excludes ZIP/PDF download time.
+
+| Certificates | Result | Successful | Time |
+|---:|---|---:|---:|
+| 5 | completed | 5 | 0.355 seconds |
+| 10 | completed | 10 | 0.496 seconds |
+| 15 | completed | 15 | 0.734 seconds |
+| 50 | completed | 50 | 2.193 seconds |
+| 200 | completed | 200 | 10.281 seconds |
+
+Actual times vary with CPU, disk, Python version, and concurrent workload. The API returns `202 Accepted` and processes jobs in the background; clients should poll the status URL rather than assume a fixed duration.
+
 ## Submit a JSON request
 
 ```powershell
