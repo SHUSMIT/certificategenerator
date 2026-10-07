@@ -75,7 +75,7 @@ Harumi Kobayashi,harumi@example.com
 Aarav Sharma,aarav@example.com
 ```
 
-The email is stored with the recipient result and can be used by a separate mail-delivery integration. This implementation generates and retrieves certificates; it does not send email itself.
+The email is stored with the recipient result for reference. This implementation only generates and retrieves certificates; email sending is intentionally out of scope.
 
 Rows with blank names or invalid email addresses are recorded as failed recipients while valid rows continue.
 
